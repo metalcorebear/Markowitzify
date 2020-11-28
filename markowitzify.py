@@ -23,6 +23,7 @@ class portfolio():
         self.portfolio = None
         self.cov = None
         self.optimal = None
+        self.simulation = None
         
         if self.verbose:
             print('Verbose is turned on... A long, long time ago the World was in an age of Chaos. In the middle of this chaos, in a little kingdom in the land of Hyrule, a legend was being handed down from generation to generation, the legend of the ''Triforce''; golden triangles possessing mystical powers...')
@@ -30,6 +31,10 @@ class portfolio():
     def help_(self):
         
         mojo.help_()
+        
+    def about(self):
+        
+        mojo.about()
         
     def set_API_KEY(self, API_KEY):
         
@@ -62,48 +67,68 @@ class portfolio():
     def build_portfolio(self, TKR_list, time_delta, **options):
         
         end_date = options.pop('end_date', None)
+        datareader = options.pop('datareader', True)
+        
+        if not isinstance(TKR_list, list):
+            TKR_list = [TKR_list]
         
         date_from, date_to = mojo.get_date_range(time_delta, end_date=end_date)
         
-        df_list = []
-        
-        if self.verbose:
-            print('It''s dangerous to go alone! Take this.')
-            print('Building portfolio...')
-        
-        if self.API_KEY is not None:
-
-            for TKR in TKR_list:
-                url = mojo.tradingdata_url(self.API_KEY, TKR, date_to, date_from)
-                
-                try:
-                    output, status = mojo.get_json(url)
-                    if status == 200:
-                        price_out = mojo.get_prices(output, column_name=TKR)
-                        df_list.append(price_out)
-                    else:
-                        print(f'HTTP Error: {status} for {TKR}')
-                        
-                        if self.verbose:
-                            print('Maybe 2020 is just a big 404 error...')
-                
-                except:
-                    print(f'Unable to find TKR...skipping {TKR}.')
+        if datareader:
             
-            if len(df_list) >= 1:
-                self.portfolio = mojo.merge_stocks(df_list)
-                
-                if self.verbose:
-                    print('Portfolio complete.')
+            self.portfolio = mojo.import_stock_data_DataReader(TKR_list, start = date_from)
             
+            if self.verbose:
+                print('Portfolio complete.')
+                print(self.portfolio.head())
+                
             if len(self.portfolio.columns) >= 1:
-                    self.cov = mojo.cov_matrix(self.portfolio)
+                self.cov = mojo.cov_matrix(self.portfolio)
+        
+                if self.verbose:
+                    print('Covariance matrix complete.')
+                    
+        else:
+        
+            df_list = []
+            
+            if self.verbose:
+                print('It''s dangerous to go alone! Take this.')
+                print('Building portfolio...')
+            
+            if self.API_KEY is not None:
+    
+                for TKR in TKR_list:
+                    url = mojo.tradingdata_url(self.API_KEY, TKR, date_to, date_from)
+                    
+                    try:
+                        output, status = mojo.get_json(url)
+                        if status == 200:
+                            price_out = mojo.get_prices(output, column_name=TKR)
+                            df_list.append(price_out)
+                        else:
+                            print(f'HTTP Error: {status} for {TKR}')
+                            
+                            if self.verbose:
+                                print('Maybe 2020 is just a big 404 error...')
+                    
+                    except:
+                        print(f'Unable to find TKR...skipping {TKR}.')
+                
+                if len(df_list) >= 1:
+                    self.portfolio = mojo.merge_stocks(df_list)
                     
                     if self.verbose:
-                        print('Covariance matrix complete.')
-        
-        else:
-            print('Error: Try setting your API Key first...')
+                        print('Portfolio complete.')
+                
+                if len(self.portfolio.columns) >= 1:
+                        self.cov = mojo.cov_matrix(self.portfolio)
+                        
+                        if self.verbose:
+                            print('Covariance matrix complete.')
+            
+            else:
+                print('Error: Try setting your API Key first...')
 
 
     def optimize(self, **options):
@@ -122,6 +147,7 @@ class portfolio():
 
         if self.verbose:
             print('Master using it and you can have this... Portfolio optimized.')
+            print(self.optimal.head())
 
 
     def import_portfolio(self, input_path, **options):
@@ -201,4 +227,51 @@ class portfolio():
             print('Portfolio requires at least one item.')
                 
         return output
+    
+    def simulate(self, threshold=0.2, days=100, **options):
+        
+        on = options.pop('on', 'return')
+        exclude = options.pop('exclude', [])
+        iterations = options.pop('iterations', 10000)
+        
+        columns = list(self.portfolio.columns)
+        
+        for item in exclude:
+            try:
+                columns.remove(item)
+            except:
+                continue
+        
+        reduced_portfolio = self.portfolio[columns]
+        
+        probabilities = []
+        
+        if self.verbose:
+            print('Simulating...')
+            print('Reticulatiing splines...')
+        
+        for column in reduced_portfolio.columns:
+            out_dict = {'TKR':column}
+            sim = mojo.simulate(self.portfolio[column], days, iterations)
+            
+            prob = mojo.probs_predicted(sim, threshold, on=on)
+            breakeven = mojo.probs_predicted(sim, 0.0, on=on)
+            roi = mojo.ROI(sim)
+            EV = mojo.expected_value(sim)
+            
+            out_dict.update({'Prob. ' + str(100*threshold) + ' % Return':prob})
+            out_dict.update({'Breakeven':breakeven})
+            out_dict.update({'ROI':roi})
+            out_dict.update({'Expected Value':EV})
+            
+            probabilities.append(out_dict)
+        
+        simulation = mojo.DataFrame(probabilities)
+        simulation = simulation.set_index('TKR')
+        
+        if self.verbose:
+            print('Simulation complete.')
+            print(simulation)
+        
+        return simulation
             

@@ -28,9 +28,28 @@ from sklearn.metrics import silhouette_samples
 import pandas as pd
 from functools import reduce
 import statsmodels.api as sml
+from pandas_datareader import data as wb
+from scipy.stats import norm
 
 
 # General Functions
+
+def about():
+     abouttext = '''Hey, Listen!
+Markowitzify
+
+(C) 2020 Mark M. Bailey, PhD
+MIT License
+
+Markowitzify will implement portfolio optimization based on the theory described by Harry Markowitz (University of California, San Diego), and elaborated by Marcos M. Lopez de Prado (Cornell University).  In 1952, Harry Markowitz posited that the investment problem can be represented as a convex optimization algorithm.  Markowitz's Critial Line Algorithm (CLA) estimates an "efficient frontier" of portfolios that maximize an expected return based on portfolio risk, where risk is measured as the standard deviation of the returns.  However, solutions to these problems are often mathematically unstable.  Lopez de Prado developed a machine-learning solution called Nested Cluster Optimization (NCO) that addresses this instability.  This repository applies the NCO algorithm to a stock portfolio.  Additionally, this repository simulates individual stock performance over time using Monte Carlo methods.
+
+## References
+* Lopez de Prado, Marcos M. *Machine Learning for Asset Managers,* Cambridge University Press, 2020.
+* Markowitz, Harry. "Portfolio Selection," *Journal of Finance,* Vol. 7, pp. 77-91, 1952.
+* Melul, Elias. "Monte Carlo Simulations for Stock Price Predictions [Python]," *Medium,* May 2018, Link: https://medium.com/analytics-vidhya/monte-carlo-simulations-for-predicting-stock-prices-python-a64f53585662.
+     '''
+     print(abouttext)
+    
 def help_():
     helptext = '''Hey, Listen!
     
@@ -47,10 +66,12 @@ Attributes:<br>
 * `portfolio_object.portfolio` = Portfolio (Pandas DataFrame).
 * `portfolio_object.cov` = Portfolio covariance matrix (Numpy array).
 * `portfolio_object.optimal` = Optimal portfolio configuration (Pandas DataFrame).
+* `portfolio_object.help_()` = View instructions.
+* `portfolio_object.about()` = View about.
 
 Parameters:<br>
-* API_KEY (optional) = (str) API Key from Market Stack (only requried if using this method to build portfolio).
-* verbose (optional, default = False) = (bool) Turn on if you like Zelda jokes.
+* `API_KEY` (optional) = (str) API Key from Market Stack (only requried if using this method to build portfolio).
+* `verbose` (optional, default = False) = (bool) Turn on if you like Zelda jokes.
 
 ### Updating Parameters
 Set API Key:<br>
@@ -66,24 +87,25 @@ Market Stack API:<br>
 `portfolio_object.build_portfolio(TKR_list, time_delta, **options)`<br>
 
 Parameters:<br>
-* TKR_list (required) = (list) List of ticker symbols for portfolio.
-* time_delta (required) = (int) Number of days to collect price data (either from today or from end_date).
-* end_date (optional, default = today's date) = (str, %m-%d-%Y) Specify the end date for the time delta calculation.<br><br>
+* `datareader` (optional, default = True) = (bool) If True, will use Pandas data_reader to find stock data.  If False, will use Market Stack API (requires API Key).
+* `TKR_list` (required) = (list) List of ticker symbols for portfolio.
+* `time_delta` (required) = (int) Number of days to collect price data (either from today or from end_date).
+* `end_date` (optional, default = today's date) = (str, %m-%d-%Y) Specify the end date for the time delta calculation.<br><br>
 
 Upload CSV:<br>
 `portfolio_object.import_portfolio(input_path, **options)`<br>
 
 Parameters:<br>
-* input_path (required) = (str) Location of CSV file.
-* filename (optional, default = 'portfolio.csv') = (str) Optional file name for portfolio CSV file.
-* dates_kw (optional, default = 'date') = (str) Name of column in portfolio that contains the date of each closing price.<br><br>
+* `input_path` (required) = (str) Location of CSV file.
+* `filename` (optional, default = 'portfolio.csv') = (str) Optional file name for portfolio CSV file.
+* `dates_kw` (optional, default = 'date') = (str) Name of column in portfolio that contains the date of each closing price.<br><br>
 
 Export Portfolio:<br>
 `portfolio_object.save(file_path, **options)`<br>
 
 Parameters:<br>
-* file_path (required) = (str) Location of CSV file.
-* filename (optional, default = 'portfolio.csv') = (str) Optional file name for portfolio CSV file.
+* `file_path` (required) = (str) Location of CSV file.
+* `filename` (optional, default = 'portfolio.csv') = (str) Optional file name for portfolio CSV file.
 
 ### Finding Optimal Weights
 Implements the Markowitz CLA algorithm.<br><br>
@@ -91,9 +113,8 @@ Implements the Markowitz CLA algorithm.<br><br>
 `portfolio_object.optimize(**options)`<br>
 
 Parameters:<br>
-* mu (optional, default = None) = (float) When not None, algorithm will return the Sharpe ratio portfolio; otherwise will return the NCO portfolio.
-* maxNumClusters (optional, default = 10 or number of stocks in portfolio - 1) = (int) Maximum number of clusters.  Must not exceed the number of stocks in the portfolio - 1.
-
+* `mu` (optional, default = None) = (float) When not None, algorithm will return the Sharpe ratio portfolio; otherwise will return the NCO portfolio.
+* `maxNumClusters` (optional, default = 10 or number of stocks in portfolio - 1) = (int) Maximum number of clusters.  Must not exceed the number of stocks in the portfolio - 1.
 
 ### Trend Analysis
 Trend analysis can be performed on securities within the portfolio.  Output is a Pandas DataFrame.<br><br>
@@ -101,7 +122,19 @@ Trend analysis can be performed on securities within the portfolio.  Output is a
 `trend_output = portfolio_object.trend(**options)`<br>
 
 Parameters:<br>
-* exclude (optional, default = []) = (list) List of ticker symbols in portfolio to exclude from trend analysis.  Default setting will include all items in portfolio.
+* `exclude` (optional, default = []) = (list) List of ticker symbols in portfolio to exclude from trend analysis.  Default setting will include all items in portfolio.
+
+### Monte Carlo Simulation
+Simulated market returns.  Output is a Pandas DataFrame with metrics for all included ticker symbols.<br><br>
+
+`simulation_output = portfolio_object.simulate(threshold=0.2, days=100, **options)`<br>
+
+Parameters:<br>
+* `threshold` (required, dafault = 0.2) = (float) Probability of a 'threshold' return, e.g., 0.2 would calculate the probability of a 20% return.
+* `days` (required, default = 100) = (int) Number of days in Monte Carlo simulation.
+* `on` (optional, default = 'return') = (str) Predicted return will be calculated on percent return if 'return' or on raw price if 'value'.
+* `exclude` (optional, default = []) = (list) List of ticker symbols in portfolio to exclude from trend analysis.  Default setting will include all items in portfolio.
+* `iterations` (optional, default = 10000) = (int) Number of iterations in Monte Carlo simulation.
 '''
     print(helptext)
 
@@ -131,9 +164,9 @@ def get_json(url):
     return output, status
 
 def get_prices(output, **options):
-    column_name = options.pop('column_name', 'price')
+    column_name = options.pop('column_name', 'adj_close')
     data = output['data']
-    prices = [a['close'] for a in data]
+    prices = [a['adj_close'] for a in data]
     dates = [a['date'] for a in data]
     price_out = DataFrame(prices, index=dates, columns=[column_name])
     return price_out
@@ -143,9 +176,19 @@ def merge_stocks(df_list):
     df_merged = df_merged.dropna()
     return df_merged
 
+# Pandas Data Reader
+def import_stock_data_DataReader(tickers, start = '2010-1-1'):
+    data = DataFrame()
+    if len(tickers) == 1:
+        data[tickers] = wb.DataReader(tickers, data_source='yahoo', start=start)['Adj Close']
+        data = DataFrame(data)
+    else:
+        for t in tickers:
+            data[t] = wb.DataReader(t, data_source='yahoo', start=start)['Adj Close']
+    return data
 
 """
-Mathematics Functions
+Portfolio Optimization Functions
 
 Note: Many of the functions in this section have been adapted from the book 
 "Machine Learning for Asset Managers" by Marcos M. Lopez de Prado, 
@@ -267,3 +310,70 @@ def optPort_nco(cov, mu=None, maxNumClusters=10):
     wInter = Series(optPort(cov_, mu_).flatten(), index=cov_.index)
     nco = wIntra.mul(wInter, axis=1).sum(axis=1).values.reshape(-1, 1)
     return nco
+
+"""
+Monte Carlo Simulation Function
+
+Note: Functions are adapted from:
+Melul, Elias. "Monte Carlo Simulations for Stock Price Predictions [Python]," *Medium,* May 2018, Link: https://medium.com/analytics-vidhya/monte-carlo-simulations-for-predicting-stock-prices-python-a64f53585662.
+
+"""
+# Simulation
+
+def log_returns(data):
+    return (np.log(1 + data.pct_change()))
+
+def drift_calc(data):
+    # Calculate Brownian Motion
+    lr = log_returns(data)
+    u = lr.mean()
+    var = lr.var()
+    drift = u-(0.5*var)
+    try:
+        return drift.values
+    except:
+        return drift
+    
+def daily_returns(data, days, iterations):
+    ft = drift_calc(data)
+    try:
+        stv = log_returns(data).std().values()
+    except:
+        stv = log_returns(data).std()
+    dr = np.exp(ft + stv*norm.ppf(np.random.rand(days, iterations)))
+    return dr
+
+def probs_predicted(predicted, higherthan, on='value'):
+    predicted = DataFrame(predicted)
+    if on == 'return':
+        predicted0 = predicted.iloc[0,0]
+        predicted = predicted.iloc[-1]
+        predList = list(predicted)
+        over = [(i*100)/predicted0 for i in predList if ((i-predicted0)*100)/predicted0 >= higherthan]
+        less = [(i*100)/predicted0 for i in predList if ((i-predicted0)*100)/predicted0 < higherthan]
+    elif on == 'value':
+        predicted = predicted.iloc[-1]
+        predList = list(predicted)
+        over = [i for i in predList if i >= higherthan]
+        less = [i for i in predList if i < higherthan]
+    else:
+        print("'on' must be either 'value' or 'return'")
+    return (len(over)/(len(less)+len(over)))
+
+def simulate(data, days, iterations):
+    returns = daily_returns(data, days, iterations)
+    price_list = np.zeros_like(returns)
+    price_list[0] = data.iloc[-1]
+    for t in range(1, days):
+        price_list[t] = price_list[t-1]*returns[t]
+    return price_list
+
+def ROI(price_list):
+    price_list_df = DataFrame(price_list)
+    out = round((price_list_df.iloc[-1].mean()-price_list[0,1])/price_list_df.iloc[-1].mean(),4)
+    return out
+
+def expected_value(price_list):
+    price_list_df = DataFrame(price_list)
+    out = round(price_list_df.iloc[-1].mean(),2)
+    return out
