@@ -23,7 +23,9 @@ class portfolio():
         self.portfolio = None
         self.cov = None
         self.optimal = None
+        self.nco = None
         self.simulation = None
+        self.trading_days = 250
         
         if self.verbose:
             print('Verbose is turned on... A long, long time ago the World was in an age of Chaos. In the middle of this chaos, in a little kingdom in the land of Hyrule, a legend was being handed down from generation to generation, the legend of the ''Triforce''; golden triangles possessing mystical powers...')
@@ -63,7 +65,28 @@ class portfolio():
         else:
             print('Grumble, Grumble')
             print('Input Error: Entry must be a bool (True or False).')
+    
+    def build_TSP(self):
         
+        if self.verbose:
+            print('It''s dangerous to go alone! Take this.')
+            print('Building TSP portfolio...')
+        
+        self.portfolio = mojo.import_stock_data_DataReader(TSP=True)
+        self.optimal = None
+        self.simulation = None
+        self.cov = None
+        
+        if self.verbose:
+            print('TSP Portfolio complete.')
+            print(self.portfolio.head())
+        
+        if len(self.portfolio.columns) >= 1:
+            self.cov = mojo.cov_matrix(self.portfolio)
+        
+        if self.verbose:
+            print('Covariance matrix complete.')
+    
     def build_portfolio(self, TKR_list, time_delta, **options):
         
         end_date = options.pop('end_date', None)
@@ -76,7 +99,11 @@ class portfolio():
         
         if datareader:
             
-            self.portfolio = mojo.import_stock_data_DataReader(TKR_list, start = date_from)
+            if self.verbose:
+                print('It''s dangerous to go alone! Take this.')
+                print('Building portfolio...')
+            
+            self.portfolio = mojo.import_stock_data_DataReader(start = date_from, tickers=TKR_list)
             
             if self.verbose:
                 print('Portfolio complete.')
@@ -129,9 +156,8 @@ class portfolio():
             
             else:
                 print('Error: Try setting your API Key first...')
-
-
-    def optimize(self, **options):
+    
+    def NCO(self, **options):
         
         mu = options.pop('mu', None)
         maxNumClusters = options.pop('max_clusters', 10)
@@ -143,13 +169,26 @@ class portfolio():
             print('Optimizing portfolio...linear algebra is fun!!')
     
         nco = mojo.optPort_nco(self.cov, mu=mu, maxNumClusters=maxNumClusters)
-        self.optimal = mojo.DataFrame(nco.T, columns=self.portfolio.columns.tolist())
+        self.nco = mojo.DataFrame(nco.T, columns=self.portfolio.columns.tolist())
 
         if self.verbose:
             print('Master using it and you can have this... Portfolio optimized.')
+            print(self.nco.head())
+
+    def markowitz(self):
+        
+        if self.verbose:
+            print('Optimizing portfolio...linear algebra is fun!!')
+        
+        mk = mojo.markowitz(self.portfolio)
+        mk = mk.reshape(mk.shape[0], 1)
+        #self.optimal = mk
+        self.optimal = mojo.DataFrame(mk.T, columns=self.portfolio.columns.tolist())
+    
+        if self.verbose:
+            print('Master using it and you can have this... Portfolio optimized.')
             print(self.optimal.head())
-
-
+    
     def import_portfolio(self, input_path, **options):
         
         if self.verbose:
@@ -171,6 +210,25 @@ class portfolio():
                 
                 if self.verbose:
                     print('Covariance matrix complete.')
+
+    def sharpe_ratio(self, **options):
+        
+        if self.optimal is None:
+            opt = self.markowitz()
+        else:
+            opt = self.optimal
+        
+        w = options.pop('weights', opt)
+        risk_free = options.pop('risk_free', 0.035)
+        
+        if self.verbose:
+            print('Calcualting Sharpe ratio...')
+            
+        self.sharpe = mojo.sharpe(self.portfolio, w, risk_free=risk_free)
+        
+        if self.verbose:
+            print(f'Sharpe Ratio: {self.sharpe}')
+
 
     def save(self, file_path, **options):
         
@@ -274,4 +332,29 @@ class portfolio():
             print(simulation)
         
         return simulation
-            
+
+
+    def hurst(self, **options):
+        
+        if self.verbose:
+            print('Calculating Hurst Exponents...')
+        
+        lag1 = options.pop('lag1', 2)
+        lag2 = options.pop('lag2', 20)
+        
+        H = []
+        
+        for column in self.portfolio.columns:
+            h0 = mojo.hurst(self.portfolio[column], lag1=lag1, lag2=lag2)
+            H.append(h0)
+        
+        H = mojo.np.array(H)
+        H = H.reshape(H.shape[0], 1)
+        
+        self.H = mojo.DataFrame(H.T, columns=self.portfolio.columns.tolist())
+        
+        if self.verbose:
+            print('Hurst Exponents.')
+            print(self.H.head())
+        
+        

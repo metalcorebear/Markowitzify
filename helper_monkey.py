@@ -30,6 +30,7 @@ from functools import reduce
 import statsmodels.api as sml
 from pandas_datareader import data as wb
 from scipy.stats import norm
+from scipy.optimize import minimize, Bounds
 
 
 # General Functions
@@ -41,12 +42,13 @@ Markowitzify
 (C) 2020 Mark M. Bailey, PhD
 MIT License
 
-Markowitzify will implement portfolio optimization based on the theory described by Harry Markowitz (University of California, San Diego), and elaborated by Marcos M. Lopez de Prado (Cornell University).  In 1952, Harry Markowitz posited that the investment problem can be represented as a convex optimization algorithm.  Markowitz's Critial Line Algorithm (CLA) estimates an "efficient frontier" of portfolios that maximize an expected return based on portfolio risk, where risk is measured as the standard deviation of the returns.  However, solutions to these problems are often mathematically unstable.  Lopez de Prado developed a machine-learning solution called Nested Cluster Optimization (NCO) that addresses this instability.  This repository applies the NCO algorithm to a stock portfolio.  Additionally, this repository simulates individual stock performance over time using Monte Carlo methods.
+Markowitzify will implement portfolio optimization based on the theory described by Harry Markowitz (University of California, San Diego), and elaborated by Marcos M. Lopez de Prado (Cornell University).  In 1952, Harry Markowitz posited that the investment problem can be represented as a convex optimization algorithm.  Markowitz's Critial Line Algorithm (CLA) estimates an "efficient frontier" of portfolios that maximize an expected return based on portfolio risk, where risk is measured as the standard deviation of the returns.  However, solutions to these problems are often mathematically unstable.  Lopez de Prado developed a machine-learning solution called Nested Cluster Optimization (NCO) that addresses this instability.  This repository applies the NCO algorithm to a stock portfolio.  Additionally, this repository simulates individual stock performance over time using Monte Carlo methods, and performs various other calculations.
 
 ## References
 * Lopez de Prado, Marcos M. *Machine Learning for Asset Managers,* Cambridge University Press, 2020.
 * Markowitz, Harry. "Portfolio Selection," *Journal of Finance,* Vol. 7, pp. 77-91, 1952.
 * Melul, Elias. "Monte Carlo Simulations for Stock Price Predictions [Python]," *Medium,* May 2018, Link: https://medium.com/analytics-vidhya/monte-carlo-simulations-for-predicting-stock-prices-python-a64f53585662.
+* Tavora, Marco. "How the Mathematics of Fractals Can Help Predict Stock Markets Shifts," *Medium,* June 2019, Link: https://towardsdatascience.com/how-the-mathematics-of-fractals-can-help-predict-stock-markets-shifts-19fee5dd6574.
      '''
      print(abouttext)
     
@@ -65,7 +67,10 @@ USAGE NOTES:
 Attributes:<br>
 * `portfolio_object.portfolio` = Portfolio (Pandas DataFrame).
 * `portfolio_object.cov` = Portfolio covariance matrix (Numpy array).
-* `portfolio_object.optimal` = Optimal portfolio configuration (Pandas DataFrame).
+* `portfolio_object.optimal` = Optimal portfolio configuration calculated using the Markowitz CLA algorithm (Pandas DataFrame).
+* `portfolio_object.nco` = Optimal portfolio configuration calculated using nco algorithm (Pandas DataFrame).
+* `portfolio_object.sharpe` = Sharpe ratio for the portfolio (float).
+* `portfolio_object.H` = Hurst Exponents for each stock in the portfolio (Pandas DataFrame).
 * `portfolio_object.help_()` = View instructions.
 * `portfolio_object.about()` = View about.
 
@@ -100,6 +105,10 @@ Parameters:<br>
 * `filename` (optional, default = 'portfolio.csv') = (str) Optional file name for portfolio CSV file.
 * `dates_kw` (optional, default = 'date') = (str) Name of column in portfolio that contains the date of each closing price.<br><br>
 
+Build TSP:<br>
+Builds a portfolio based on Thrift Savings Plan funds with a lookback of 5 years from the current date.<br>
+`portfolio_object.build_TSP()`<br>
+
 Export Portfolio:<br>
 `portfolio_object.save(file_path, **options)`<br>
 
@@ -108,13 +117,33 @@ Parameters:<br>
 * `filename` (optional, default = 'portfolio.csv') = (str) Optional file name for portfolio CSV file.
 
 ### Finding Optimal Weights
-Implements the Markowitz CLA algorithm.<br><br>
+Implements the NCO CLA algorithm.<br><br>
 
-`portfolio_object.optimize(**options)`<br>
+`portfolio_object.nco(**options)`<br>
 
 Parameters:<br>
 * `mu` (optional, default = None) = (float) When not None, algorithm will return the Sharpe ratio portfolio; otherwise will return the NCO portfolio.
-* `maxNumClusters` (optional, default = 10 or number of stocks in portfolio - 1) = (int) Maximum number of clusters.  Must not exceed the number of stocks in the portfolio - 1.
+* `maxNumClusters` (optional, default = 10 or number of stocks in portfolio - 1) = (int) Maximum number of clusters.  Must not exceed the number of stocks in the portfolio - 1.<br><br>
+
+Implements the Markowitz optimization algorithm.<br><br>
+
+`portfolio_object.optimize()`
+
+### Hurst Exponent and Sharpe Ratios
+Calculate the Hurst Exponent for each stock in the portfolio.<br><br>
+
+`portfolio_object.hurst(**options)`<br>
+
+Parameters:<br>
+* lag1, lag2 (optional, dafault = (2, 20)) = (int) Lag times for fractal calculation.<br><br>
+
+Calculate the Sharpe ratio for the portfolio.<br><br>
+
+`H = portfolio_object.sharpe_ratio(**options)`<br>
+
+Parameters:<br>
+* w (optional, dafault = Markowitz optimal weights) = (Numpy array) Weights for each stock in the portfolio.
+* risk_free (optional, dafault = 0.035) = (float) Risk-free rate of return.
 
 ### Trend Analysis
 Trend analysis can be performed on securities within the portfolio.  Output is a Pandas DataFrame.<br><br>
@@ -177,15 +206,82 @@ def merge_stocks(df_list):
     return df_merged
 
 # Pandas Data Reader
-def import_stock_data_DataReader(tickers, start = '2010-1-1'):
+def import_stock_data_DataReader(start = '2010-1-1', **options):
+    tickers = options.pop('tickers', [])
+    TSP = options.pop('TSP', False)
     data = DataFrame()
-    if len(tickers) == 1:
-        data[tickers] = wb.DataReader(tickers, data_source='yahoo', start=start)['Adj Close']
-        data = DataFrame(data)
+    if not TSP:
+        if len(tickers) != 0:
+            if len(tickers) == 1:
+                data[tickers] = wb.DataReader(tickers, data_source='yahoo', start=start)['Adj Close']
+                data = DataFrame(data)
+            else:
+                for t in tickers:
+                    data[t] = wb.DataReader(t, data_source='yahoo', start=start)['Adj Close']
+        else:
+            print('Tickers must be specified.')
     else:
-        for t in tickers:
-            data[t] = wb.DataReader(t, data_source='yahoo', start=start)['Adj Close']
+        import TSP_Reader
+        symbols = ['G Fund', 'F Fund', 'C Fund', 'S Fund', 'I Fund']
+        a = TSP_Reader.TSPReader(symbols=symbols)
+        data = a.read()
     return data
+
+
+"""
+Other mathematical functions
+
+"""
+
+# covariance matrix
+def cov_matrix(df):
+    cov = np.cov(df.values.T)
+    return cov
+
+# Log returns
+def log_returns(data):
+    return (np.log(1 + data.pct_change()))
+
+# Hurst Exponent
+
+def hurst(price_list, lag1=2, lag2=20):
+    price_list = price_list.dropna()
+    price_list = price_list.values
+    lags = range(lag1, lag2)
+    tau = [np.sqrt(np.std(np.subtract(price_list[lag:], price_list[:-lag]))) for lag in lags]
+    m = np.polyfit(np.log(lags), np.log(tau), 1)
+    H = 2*m[0]
+    return H
+
+def ret_risk(w, exp_return, cov):
+    return -((w.T@exp_return) / (w.T@cov@w)**0.5)
+
+# Markowitz Optimization
+def markowitz(df):
+    data = log_returns(df)
+    data = data.dropna()
+    w = np.ones((data.values.T.shape[0],1))*(1.0/data.values.T.shape[0])
+    m = np.mean(data.values.T, axis=1)
+    demeaned = data.values.T - m[:,None]
+    m = m.reshape(m.shape[0],1)
+    exp_return = m*w
+    cov = np.cov(demeaned)
+    opt_bounds = Bounds(0, 1)
+    opt_constraints = ({'type': 'eq', 'fun': lambda w: 1.0 - np.sum(w)})
+    res = minimize(ret_risk, w, args = (exp_return, cov), method = 'SLSQP', bounds = opt_bounds, constraints = opt_constraints)
+    return res.x
+    
+# Sharpe Ratio
+def sharpe(df, w, risk_free=0.035):
+    price_list = log_returns(df)
+    price_list = price_list.dropna()
+    price_list = price_list.values - np.log(1 + risk_free)
+    m = np.mean(price_list.T, axis=1)
+    s = np.std(price_list.T, axis=1)
+    S_ratio = m/s
+    S_ratio = w@S_ratio
+    return S_ratio
+    
 
 """
 Portfolio Optimization Functions
@@ -197,11 +293,6 @@ Cambridge University Press, 2020.
 """
 
 # Machine Learning Functions
-
-# covariance matrix
-def cov_matrix(df):
-    cov = np.cov(df.values.T)
-    return cov
 
 # trend scan
 def tValLinR(close):
@@ -319,9 +410,6 @@ Melul, Elias. "Monte Carlo Simulations for Stock Price Predictions [Python]," *M
 
 """
 # Simulation
-
-def log_returns(data):
-    return (np.log(1 + data.pct_change()))
 
 def drift_calc(data):
     # Calculate Brownian Motion

@@ -4,16 +4,18 @@
 
 ## About
 
-Markowitzify will implement portfolio optimization based on the theory described by Harry Markowitz (University of California, San Diego), and elaborated by Marcos M. Lopez de Prado (Cornell University).  In 1952, Harry Markowitz posited that the investment problem can be represented as a convex optimization algorithm.  Markowitz's Critial Line Algorithm (CLA) estimates an "efficient frontier" of portfolios that maximize an expected return based on portfolio risk, where risk is measured as the standard deviation of the returns.  However, solutions to these problems are often mathematically unstable.  Lopez de Prado developed a machine-learning solution called Nested Cluster Optimization (NCO) that addresses this instability.  This repository applies the NCO algorithm to a stock portfolio.  Additionally, this repository simulates individual stock performance over time using Monte Carlo methods.
+Markowitzify will implement portfolio optimization based on the theory described by Harry Markowitz (University of California, San Diego), and elaborated by Marcos M. Lopez de Prado (Cornell University).  In 1952, Harry Markowitz posited that the investment problem can be represented as a convex optimization algorithm.  Markowitz's Critial Line Algorithm (CLA) estimates an "efficient frontier" of portfolios that maximize an expected return based on portfolio risk, where risk is measured as the standard deviation of the returns.  However, solutions to these problems are often mathematically unstable.  Lopez de Prado developed a machine-learning solution called Nested Cluster Optimization (NCO) that addresses this instability.  This repository applies the NCO algorithm to a stock portfolio.  Additionally, this repository simulates individual stock performance over time using Monte Carlo methods, and performs various other calculations.
 
 ## References
 * Lopez de Prado, Marcos M. *Machine Learning for Asset Managers,* Cambridge University Press, 2020.
 * Markowitz, Harry. "Portfolio Selection," *Journal of Finance,* Vol. 7, pp. 77-91, 1952.
 * Melul, Elias. "Monte Carlo Simulations for Stock Price Predictions [Python]," *Medium,* May 2018, Link: https://medium.com/analytics-vidhya/monte-carlo-simulations-for-predicting-stock-prices-python-a64f53585662.
+* Tavora, Marco. "How the Mathematics of Fractals Can Help Predict Stock Markets Shifts," *Medium,* June 2019, Link: https://towardsdatascience.com/how-the-mathematics-of-fractals-can-help-predict-stock-markets-shifts-19fee5dd6574.
 
 ## Updates
-* 2020-11-28: Added Monte Carlo Simulation Capability
-* 2020-11-27: Initial commit
+* 2020-12-01: Added Hurst Exponent, Sharpe Ratio, and separated NCO and Markowitz optimization methods.
+* 2020-11-28: Added Monte Carlo Simulation capability.
+* 2020-11-27: Initial commit.
 
 ## Installation
 `pip install markowitzify`
@@ -28,7 +30,10 @@ Markowitzify will implement portfolio optimization based on the theory described
 Attributes:<br>
 * `portfolio_object.portfolio` = Portfolio (Pandas DataFrame).
 * `portfolio_object.cov` = Portfolio covariance matrix (Numpy array).
-* `portfolio_object.optimal` = Optimal portfolio configuration (Pandas DataFrame).
+* `portfolio_object.optimal` = Optimal portfolio configuration calculated using the Markowitz CLA algorithm (Pandas DataFrame).
+* `portfolio_object.nco` = Optimal portfolio configuration calculated using nco algorithm (Pandas DataFrame).
+* `portfolio_object.sharpe` = Sharpe ratio for the portfolio (float).
+* `portfolio_object.H` = Hurst Exponents for each stock in the portfolio (Pandas DataFrame).
 * `portfolio_object.help_()` = View instructions.
 * `portfolio_object.about()` = View about.
 
@@ -63,6 +68,10 @@ Parameters:<br>
 * `filename` (optional, default = 'portfolio.csv') = (str) Optional file name for portfolio CSV file.
 * `dates_kw` (optional, default = 'date') = (str) Name of column in portfolio that contains the date of each closing price.<br><br>
 
+Build TSP:<br>
+Builds a portfolio based on Thrift Savings Plan funds with a lookback of 5 years from the current date.<br>
+`portfolio_object.build_TSP()`<br>
+
 Export Portfolio:<br>
 `portfolio_object.save(file_path, **options)`<br>
 
@@ -71,13 +80,33 @@ Parameters:<br>
 * `filename` (optional, default = 'portfolio.csv') = (str) Optional file name for portfolio CSV file.
 
 ### Finding Optimal Weights
-Implements the Markowitz CLA algorithm.<br><br>
+Implements the NCO CLA algorithm.<br><br>
 
-`portfolio_object.optimize(**options)`<br>
+`portfolio_object.nco(**options)`<br>
 
 Parameters:<br>
 * `mu` (optional, default = None) = (float) When not None, algorithm will return the Sharpe ratio portfolio; otherwise will return the NCO portfolio.
-* `maxNumClusters` (optional, default = 10 or number of stocks in portfolio - 1) = (int) Maximum number of clusters.  Must not exceed the number of stocks in the portfolio - 1.
+* `maxNumClusters` (optional, default = 10 or number of stocks in portfolio - 1) = (int) Maximum number of clusters.  Must not exceed the number of stocks in the portfolio - 1.<br><br>
+
+Implements the Markowitz optimization algorithm.<br><br>
+
+`portfolio_object.optimize()`
+
+### Hurst Exponent and Sharpe Ratios
+Calculate the Hurst Exponent for each stock in the portfolio.<br><br>
+
+`portfolio_object.hurst(**options)`<br>
+
+Parameters:<br>
+* lag1, lag2 (optional, dafault = (2, 20)) = (int) Lag times for fractal calculation.<br><br>
+
+Calculate the Sharpe ratio for the portfolio.<br><br>
+
+`H = portfolio_object.sharpe_ratio(**options)`<br>
+
+Parameters:<br>
+* w (optional, dafault = Markowitz optimal weights) = (Numpy array) Weights for each stock in the portfolio.
+* risk_free (optional, dafault = 0.035) = (float) Risk-free rate of return.
 
 ### Trend Analysis
 Trend analysis can be performed on securities within the portfolio.  Output is a Pandas DataFrame.<br><br>

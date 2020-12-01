@@ -10,7 +10,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="markowitzify",
-    version="0.0.3",
+    version="0.0.4",
     author="metalcorebear",
     author_email="mark.mbailey@gmail.com",
     description="Markowitzify will implement portfolio optimization based on the theory described by Harry Markowitz (University of California, San Diego), and elaborated by Marcos M. Lopez de Prado (Cornell University).  Additionally, this repository simulates individual stock performance over time using Monte Carlo methods.",
@@ -18,8 +18,8 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/metalcorebear/Markowitzify",
     packages=setuptools.find_packages(),
-    install_requires=['requests', 'pandas', 'numpy', 'sklearn', 'pandas_datareader', 'scipy'],
-    py_modules=["markowitzify", "helper_monkey"],
+    install_requires=['requests', 'pandas', 'numpy', 'sklearn', 'pandas_datareader', 'scipy', 'statsmodels'],
+    py_modules=["markowitzify", "helper_monkey", "TSP_Reader"],
     package_data={},
     classifiers=[
         "Programming Language :: Python :: 3.7",
