@@ -60,7 +60,7 @@ class portfolio():
             
             if not self.verbose:
                 print('Well excuuuse me, princess!')
-                print('Verbose is turned off.  I guess you don''t like funny Zelda quotes...')
+                print("Verbose is turned off.  I guess you don't like funny Zelda quotes...")
         
         else:
             print('Grumble, Grumble')
