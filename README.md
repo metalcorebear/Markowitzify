@@ -90,7 +90,7 @@ Parameters:<br>
 
 Implements the Markowitz optimization algorithm.<br><br>
 
-`portfolio_object.optimize()`
+`portfolio_object.markowitz()`
 
 ### Hurst Exponent and Sharpe Ratios
 Calculate the Hurst Exponent for each stock in the portfolio.<br><br>
