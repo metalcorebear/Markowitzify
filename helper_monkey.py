@@ -31,6 +31,8 @@ import statsmodels.api as sml
 from pandas_datareader import data as wb
 from scipy.stats import norm
 from scipy.optimize import minimize, Bounds
+import zipfile, urllib.request, shutil
+import os
 
 
 # General Functions
@@ -42,14 +44,22 @@ Markowitzify
 (C) 2020 Mark M. Bailey, PhD
 MIT License
 
-Markowitzify will implement portfolio optimization based on the theory described by Harry Markowitz (University of California, San Diego), and elaborated by Marcos M. Lopez de Prado (Cornell University).  In 1952, Harry Markowitz posited that the investment problem can be represented as a convex optimization algorithm.  Markowitz's Critial Line Algorithm (CLA) estimates an "efficient frontier" of portfolios that maximize an expected return based on portfolio risk, where risk is measured as the standard deviation of the returns.  However, solutions to these problems are often mathematically unstable.  Lopez de Prado developed a machine-learning solution called Nested Cluster Optimization (NCO) that addresses this instability.  This repository applies the NCO algorithm to a stock portfolio.  Additionally, this repository simulates individual stock performance over time using Monte Carlo methods, and performs various other calculations.
+Markowitzify will implement a variety of portfolio and stock/cryptocurrency analysis methods to optimize portfolios or trading strategies.  The two primary classes are portfolio and stonks.<br>
+
+The portfolio class will implement portfolio optimization based on the theory described by Harry Markowitz (University of California, San Diego), and elaborated by Marcos M. Lopez de Prado (Cornell University).  In 1952, Harry Markowitz posited that the investment problem can be represented as a convex optimization algorithm.  Markowitz's Critial Line Algorithm (CLA) estimates an "efficient frontier" of portfolios that maximize an expected return based on portfolio risk, where risk is measured as the standard deviation of the returns.  However, solutions to these problems are often mathematically unstable.  Lopez de Prado developed a machine-learning solution called Nested Cluster Optimization (NCO) that addresses this instability.  This repository applies both the CLA algorithm, as well as the improved NCO algorithm, to a stock portfolio.  Additionally, this repository simulates portfolio performance over time using Monte Carlo methods, and calculates various other measures of portfolio performance, including the Hurst Exponent and Sharpe Ratio.<br>
+
+The stonks class will create a stock or cryptocurrency object containing OHLC data.  The Relative Strength Indicator (RSI), a Fractal Indicator (as defined by Kaabar), Bollinger Bands, and Bullish/Bearish signals (based on RSI and the Fractal Indicator) can be calculated.  Simulated trading strategies can also be backtested to elucidate an optimal strategy based on maximized profit.
 
 ## References
+* Carr, Michael. "Measure Volatility With Average True Range," *Investopedia,* Nov 2019, Link: https://www.investopedia.com/articles/trading/08/average-true-range.asp#:~:text=The%20average%20true%20range%20%28ATR%29%20is%20an%20exponential,signals%2C%20while%20shorter%20timeframes%20will%20increase%20trading%20activity.
+* Hall, Mary. "Enter Profitable Territory With Average True Range," *Investopedia," Sep 2020, Link: https://www.investopedia.com/articles/trading/08/atr.asp.
+* Kaabar, Sofien. "Coding Different Facets of Volatility," *Medium,* Oct 2020, Link: https://medium.com/python-in-plain-english/coding-different-facets-of-volatility-bd1a49282df4.
+* Kaabar, Sofien. "Developing a Systematic Indicator to Trade Cryptocurrencies With Python," *Medium,* Dec 2020, Link: https://medium.com/python-in-plain-english/a-technical-indicator-that-works-for-cryptocurrencies-python-trading-258963c7e9c7.
+* Kaabar, Sofien. "The Fractal Indicator — Detecting Tops & Bottoms in Markets," *Medium,* Dec 2020, Link: https://medium.com/swlh/the-fractal-indicator-detecting-tops-bottoms-in-markets-1d8aac0269e8.
 * Lopez de Prado, Marcos M. *Machine Learning for Asset Managers,* Cambridge University Press, 2020.
 * Markowitz, Harry. "Portfolio Selection," *Journal of Finance,* Vol. 7, pp. 77-91, 1952.
 * Melul, Elias. "Monte Carlo Simulations for Stock Price Predictions [Python]," *Medium,* May 2018, Link: https://medium.com/analytics-vidhya/monte-carlo-simulations-for-predicting-stock-prices-python-a64f53585662.
-* Tavora, Marco. "How the Mathematics of Fractals Can Help Predict Stock Markets Shifts," *Medium,* June 2019, Link: https://towardsdatascience.com/how-the-mathematics-of-fractals-can-help-predict-stock-markets-shifts-19fee5dd6574.
-     '''
+* Tavora, Marco. "How the Mathematics of Fractals Can Help Predict Stock Markets Shifts," *Medium,* June 2019, Link: https://towardsdatascience.com/how-the-mathematics-of-fractals-can-help-predict-stock-markets-shifts-19fee5dd6574.'''
      print(abouttext)
     
 def help_():
@@ -57,17 +67,15 @@ def help_():
     
 USAGE NOTES:
         
-## Usage
+## The Portfolio Class
 
 ### Object Instantiation
-`import markowitzify`<br>
-
-`portfolio_object = markowitzify.portfolio(**options)`<br><br>
+`portfolio_object = markowitzify.portfolio(**options)`<br>
 
 Attributes:<br>
 * `portfolio_object.portfolio` = Portfolio (Pandas DataFrame).
 * `portfolio_object.cov` = Portfolio covariance matrix (Numpy array).
-* `portfolio_object.optimal` = Optimal portfolio configuration calculated using the Markowitz CLA algorithm (Pandas DataFrame).
+* `portfolio_object.optimal` = Optimal portfolio configuration calculated using the Markowitz (CLA) algorithm (Pandas DataFrame).
 * `portfolio_object.nco` = Optimal portfolio configuration calculated using nco algorithm (Pandas DataFrame).
 * `portfolio_object.sharpe` = Sharpe ratio for the portfolio (float).
 * `portfolio_object.H` = Hurst Exponents for each stock in the portfolio (Pandas DataFrame).
@@ -80,7 +88,7 @@ Parameters:<br>
 
 ### Updating Parameters
 Set API Key:<br>
-`portfolio_object.set_API_KEY(<STR>)`<br><br>
+`portfolio_object.set_API_KEY(<STR>)`<br>
 
 Set verbose:<br>
 `portfolio_object.set_verbose(<BOOL>)`<br>
@@ -117,27 +125,27 @@ Parameters:<br>
 * `filename` (optional, default = 'portfolio.csv') = (str) Optional file name for portfolio CSV file.
 
 ### Finding Optimal Weights
-Implements the NCO CLA algorithm.<br><br>
+Implements the NCO algorithm.<br>
 
 `portfolio_object.nco(**options)`<br>
 
 Parameters:<br>
 * `mu` (optional, default = None) = (float) When not None, algorithm will return the Sharpe ratio portfolio; otherwise will return the NCO portfolio.
-* `maxNumClusters` (optional, default = 10 or number of stocks in portfolio - 1) = (int) Maximum number of clusters.  Must not exceed the number of stocks in the portfolio - 1.<br><br>
+* `maxNumClusters` (optional, default = 10 or number of stocks in portfolio - 1) = (int) Maximum number of clusters.  Must not exceed the number of stocks in the portfolio - 1.<br>
 
-Implements the Markowitz optimization algorithm.<br><br>
+Implements the Markowitz optimization algorithm.<br>
 
-`portfolio_object.optimize()`
+`portfolio_object.markowitz()`
 
 ### Hurst Exponent and Sharpe Ratios
-Calculate the Hurst Exponent for each stock in the portfolio.<br><br>
+Calculate the Hurst Exponent for each stock in the portfolio.<br>
 
 `portfolio_object.hurst(**options)`<br>
 
 Parameters:<br>
-* lag1, lag2 (optional, dafault = (2, 20)) = (int) Lag times for fractal calculation.<br><br>
+* lag1, lag2 (optional, default = (2, 20)) = (int) Lag times for fractal calculation.<br>
 
-Calculate the Sharpe ratio for the portfolio.<br><br>
+Calculate the Sharpe ratio for the portfolio.<br>
 
 `H = portfolio_object.sharpe_ratio(**options)`<br>
 
@@ -146,7 +154,7 @@ Parameters:<br>
 * risk_free (optional, dafault = 0.035) = (float) Risk-free rate of return.
 
 ### Trend Analysis
-Trend analysis can be performed on securities within the portfolio.  Output is a Pandas DataFrame.<br><br>
+Trend analysis can be performed on securities within the portfolio.  Output is a Pandas DataFrame.<br>
 
 `trend_output = portfolio_object.trend(**options)`<br>
 
@@ -154,7 +162,7 @@ Parameters:<br>
 * `exclude` (optional, default = []) = (list) List of ticker symbols in portfolio to exclude from trend analysis.  Default setting will include all items in portfolio.
 
 ### Monte Carlo Simulation
-Simulated market returns.  Output is a Pandas DataFrame with metrics for all included ticker symbols.<br><br>
+Simulated market returns.  Output is a Pandas DataFrame with metrics for all included ticker symbols.<br>
 
 `simulation_output = portfolio_object.simulate(threshold=0.2, days=100, **options)`<br>
 
@@ -164,6 +172,79 @@ Parameters:<br>
 * `on` (optional, default = 'return') = (str) Predicted return will be calculated on percent return if 'return' or on raw price if 'value'.
 * `exclude` (optional, default = []) = (list) List of ticker symbols in portfolio to exclude from trend analysis.  Default setting will include all items in portfolio.
 * `iterations` (optional, default = 10000) = (int) Number of iterations in Monte Carlo simulation.
+
+## The Stonks Class
+
+### Object Instantiation
+`stock_object = markowitzify.stonks(TKR, **options)`<br>
+
+Attributes:<br>
+* `stock_object.TKR` = Ticker symbol (str).
+* `stock_object.stonk` = OHLC array (Pandas DataFrame).
+* `stock_object.bands` = OHLC with Bollinger Bands (Pandas DataFrame).
+* `stock_object.fract` = OHLC with Fractal Indicator (Pandas DataFrame).
+* `stock_object.rsi` = OHLC with RSI Indicator (Pandas DataFrame).
+* `stock_object.sig` = OHLC with Bullish/Bearish signals based on Fractal Indicator and RSI (-1 == oversold, 1 == overbought) (Pandas DataFrame).
+* `stock_object.strategies` = Traading strategies (Buy/Risk coefficients of exponential average true range) and backtesting outcomes (Pandas DataFrame).
+* `stock_object.best_strategy` = Optimal strategy that maximizes profit (dictionary).
+* `stock_object.help_()` = View instructions.
+* `stock_object.about()` = View about.
+
+Parameters:<br>
+* `TKR` (required) = (str) Ticker symbol.
+* `start` (optional, default = 10 years from today) = (str) Start date to collect OHLC data.
+* `verbose` (optional, default = False) = (bool) Turn on if you like Zelda jokes.
+
+### Updating Parameters
+Set verbose:<br>
+`portfolio_object.set_verbose(<BOOL>)`<br>
+
+### Fractal Indicator
+Calculates the Fractal Indicator, as defined by Kaabar (see "The Fractal Indicator — Detecting Tops & Bottoms in Markets").<br>
+
+`stock_object.fractal(**options)`<br>
+
+Parameters:<br>
+* `n` (optional, default = 20) = (int) EMA and Rolling Volatility lookback.
+* `lookback` (optional, default = 14) = (int) Fractal Indicator lookback.<br>
+
+### Bollinger Bands
+Calculates trending price, as well as upper and lower Bollinger Bands.<br>
+
+`stock_object.bollinger(**options)`<br>
+
+Parameters:<br>
+* `n` (optional, default = 20) = (int) Number of days in smoothing period.
+* `m` (optional, default = 2) = (int) Number of standard deviations.
+* `log_returns` (optional, default = True) = (bool) Use Log Returns for calculation of bands.  If False, uses Adjusted Close raw values.<br>
+
+### Relative Strength Indicator
+Calculates the RSI for the dataset.<br>
+
+`stock_object.RSI(**options)`<br>
+
+Parameters:<br>
+* `initial_lookback` (optional, default = 14) = (int) Lookback period for initial RSI value.
+* `lookback` (optional, default = 14) = (int) Lookback period for subsequent RSI values.<br>
+
+### Bullish / Bearish Signal Generator
+Determines Bullish or Bearish signal based on Fractal Indicator and RSI signals.  (-1 == oversold, 1 == overbought).<br>
+
+`stock_object.signal(**options)`<br>
+
+Parameters:<br>
+* `lookback` (optional, default = 14) = (int) Sets all lookback periods for RSI and Fractal Indicator calculations.<br>
+
+### Simulate Trading Strategies
+Simulates and backtests a set of strategies (Buy/Risk coefficients) to find the optimum trading strategy that maximizes profit within a range of "Buy" and "Risk" values. Uses exponential average true range to quantify risk.  "Buy" and "Risk" parameters are multiples of eATR for entry and exit criteria, respectively.  For example, if buy = 1, then the entry criterion is defined as 1x eATR plus the previous day's closing price.  If risk = 2, then a stop loss of 2x the eATR is defined as the exit criterion.<br>
+
+`stock_object.strategize(**options)`<br>
+
+Parameters:<br>
+* `eATR_lookback` (optional, default = 10) = (int) Sets lookback periods for exponential average true range.
+* `buy_range` (optional, default = (1.0, 4.0, 0.25)) = (tuple) Range of "Buy" coefficients to consider in the model, in the format (start, stop, interval).
+* `risk_range` (optional, default = (1.0, 4.0, 0.25)) = (tuple) Range of "Risk" coefficients to consider in the model, in the format (start, stop, interval).
+* `chandelier` (optional, default = False) = (bool) If True, uses the chandelier method for determining stop loss (high price - risk*eATR).  If False, uses the closing price instead of high price.<br>
 '''
     print(helptext)
 
@@ -227,6 +308,19 @@ def import_stock_data_DataReader(start = '2010-1-1', **options):
         data = a.read()
     return data
 
+
+def import_high_low(start = '2010-1-1', **options):
+    ticker = options.pop('ticker', None)
+    data = DataFrame()
+    if ticker is not None:
+        data['Open'] = wb.DataReader(ticker, data_source='yahoo', start=start)['Open']
+        data['high'] = wb.DataReader(ticker, data_source='yahoo', start=start)['High']
+        data['low'] = wb.DataReader(ticker, data_source='yahoo', start=start)['Low']
+        data['Adj Close'] = wb.DataReader(ticker, data_source='yahoo', start=start)['Adj Close']
+        data = DataFrame(data)
+    else:
+        print('Ticker must be specified.')
+    return data
 
 """
 Other mathematical functions
@@ -465,3 +559,372 @@ def expected_value(price_list):
     price_list_df = DataFrame(price_list)
     out = round(price_list_df.iloc[-1].mean(),2)
     return out
+
+"""
+Fractal Indicator Function
+
+Note: Functions are adapted from:
+Kaabar, Sofien. "The Fractal Indicator — Detecting Tops & Bottoms in Markets," *Medium,* Dec 2020, Link: https://medium.com/swlh/the-fractal-indicator-detecting-tops-bottoms-in-markets-1d8aac0269e8.
+"""
+# Simple Moving Average
+"""
+def sma(x, n=10):
+    cumsum = np.cumsum(np.insert(x, 0, 0))
+    return (cumsum[n:] - cumsum[:-n]) / float(n)
+"""
+def sma(s, n=10):
+    out = np.zeros(len(s))
+    for i in range(1,len(s)-n):
+        out[i+n] = np.mean(s[i:i+n])
+    return out
+
+# Exponential Moving Average
+def ema(s, n=10):
+     ema = np.zeros(len(s))
+     multiplier = 2.0 / float(1 + n)
+     sma = sum(s[:n]) / float(n)
+     ema[n-1] = sma
+     for i in range(1,len(s)-n):
+         ema[i+n] = s[i+n]*multiplier + ema[i-1+n]*(1-multiplier)
+     return ema
+     
+# Rolling volatility
+def rolling_volatility(s, n=10):
+    volatility = np.zeros(len(s))
+    for i in range(1,len(s)-n):
+        volatility[i+n] = np.std(s[i:i+n])
+    return volatility
+
+# Fractal Indicator
+# df is from import_high_low() function.
+def fractal_indicator(df, n=20, min_max_lookback=14):
+    np.seterr(divide='ignore', invalid='ignore')
+    
+    high = df['high'].values
+    low = df['low'].values
+    
+    ema_high = ema(high, n=n)
+    ema_low = ema(low, n=n)
+    
+    vol_high = rolling_volatility(high, n=n)
+    vol_low = rolling_volatility(low, n=n)
+    ave_vol = (vol_high + vol_low)/2.0
+    
+    demeaned_high = high - ema_high
+    demeaned_low = low - ema_low
+    
+    max_high = np.zeros(len(df))
+    min_low = np.zeros(len(df))
+    
+    for i in range(min_max_lookback, len(df)):
+        max_high[i] = max(demeaned_high[(i - min_max_lookback + 1):(i + 1)])
+        min_low[i] = min(demeaned_low[(i - min_max_lookback + 1):(i + 1)])
+        
+    fractal_1 = max_high-min_low
+    
+    fractal = np.divide(fractal_1, ave_vol)
+    
+    out_df = DataFrame(fractal, columns=['Fractal_Indicator'])
+    out_df = out_df.replace([np.nan, np.inf], 0)
+    out_df = out_df.set_index(df.index)
+    
+    df_out = df.merge(out_df, right_index=True, left_index=True)
+    
+    return df_out
+    
+
+"""
+Market Sentiment Data
+
+Note: Functions are adapted from:
+Kaabar, Sofien. "Using Python to Download Sentiment Data for Financial Trading," *Medium,* Nov 2020, Link: https://medium.com/swlh/using-python-to-download-sentiment-data-for-financial-trading-1c44346926e2.
+"""
+
+# Download Committment of Traders Report
+
+def get_COT(url, file_name):
+    if not os.path.exists(r'COT'):
+        os.mkdir(r'COT')
+    file_path = os.path.join(r'COT', file_name)
+    with urllib.request.urlopen(url) as response, open(file_path, 'wb') as out_file:
+        shutil.copyfileobj(response, out_file)
+    with zipfile.ZipFile(file_path) as zf:
+        zf.extractall(path=r'COT')
+    year = file_name.split('.')[0]
+    new_file_name = year + '.xls'
+    os.rename(r'COT/FinFutYY.xls',os.path.join(r'COT', new_file_name))
+    
+def get_COT_df(COT_path):
+    data = pd.read_excel(COT_path)
+    data = data[['Market_and_Exchange_Names', 
+                                 'Report_Date_as_MM_DD_YYYY',
+                                 'Pct_of_OI_Dealer_Long_All',
+                                 'Pct_of_OI_Dealer_Short_All',
+                                 'Pct_of_OI_Lev_Money_Long_All',
+                                 'Pct_of_OI_Lev_Money_Short_All']]
+    data['net_hedgers'] = data['Pct_of_OI_Dealer_Long_All'] - data['Pct_of_OI_Dealer_Short_All']
+    data['net_funds'] = data['Pct_of_OI_Lev_Money_Long_All'] - data['Pct_of_OI_Lev_Money_Short_All']
+    data = data[['Market_and_Exchange_Names','Report_Date_as_MM_DD_YYYY','net_hedgers','net_funds']]
+    return data
+
+# Get and concatenate all COTs data for 2010 through current year.
+    
+def build_COT():
+    url_base = r'https://www.cftc.gov/files/dea/history/fut_fin_xls_'
+    t = datemethod.today()
+    end_year = t.year + 1
+    year_list = list(range(2010, end_year))
+    year_list = [str(i) + '.zip' for i in year_list]
+    year_list = [i for i in year_list if not os.path.exists(os.path.join('COT', i))]
+    if len(year_list) != 0:
+        url_list = [url_base + i for i in year_list]
+        for i in range(len(year_list)):
+            try:
+                get_COT(url_list[i], year_list[i])
+            except:
+                continue
+    xls_list = []
+    for i in os.walk(r'COT'):
+        out_tuple = i
+    xls_list = [i for i in out_tuple[2] if '.xls' in i]
+    xls_list = [os.path.join('COT', i) for i in xls_list]
+    df_list = []
+    for i in xls_list:
+        try:
+            df = get_COT_df(i)
+            df_list.append(df)
+        except:
+            continue
+    out_df = pd.concat(df_list)
+    out_df = out_df.drop_duplicates()
+    out_df = out_df.reset_index()
+    out_df = out_df[['Market_and_Exchange_Names','Report_Date_as_MM_DD_YYYY','net_hedgers','net_funds']]
+    return out_df
+    
+    
+# Bollinger Bands
+# Data are from import_high_low() function.
+def bollinger(data, m=2, n=20, log_=True):
+    tp = (data['high'].values + data['low'].values + data['Adj Close'].values)/3.0
+    ma = sma(tp, n=n)
+    sd = rolling_volatility(tp, n=n)
+    upper = ma[:] + m*sd[:]
+    lower = ma[:] - m*sd[:]
+    if log_:
+        upper = log_returns(pd.DataFrame(upper))
+        tp = log_returns(pd.DataFrame(tp))
+        lower = log_returns(pd.DataFrame(lower))
+        upper = upper.replace([np.nan, np.inf], 0)
+        tp = tp.replace([np.nan, np.inf], 0)
+        lower = lower.replace([np.nan, np.inf], 0)
+        upper = upper.values
+        tp = tp.values
+        lower = lower.values
+    return tp, upper, lower
+
+
+# Relative Strength Index
+# EMA Method
+def RSI(data1, initial_lookback=14, lookback=14):
+    data2 = data1['Adj Close']
+    data2 = data2.pct_change()
+    data2 = data2.replace(np.nan, 0)
+    data = data2.values
+    pos = [abs(i) if i > 0 else 0.0 for i in data[0:initial_lookback]]
+    neg = [abs(i)  if i < 0 else 0.0 for i in data[0:initial_lookback]]
+    pos = np.array(pos)
+    neg = np.array(neg)
+    ave_gain = np.average(pos)
+    ave_loss = np.average(neg)
+    rsi1 = 100.0 - (100.0 / (1 + ave_gain/ave_loss))
+    rsi_out = np.zeros(len(data))
+    rsi_out[initial_lookback] = rsi1
+    alpha = 2.0/(lookback+1.0)
+    for i in range(initial_lookback+1, len(data)):
+        pos = [abs(j) if j > 0 else 0.0 for j in data[i-lookback:i]]
+        neg = [abs(j) if j < 0 else 0.0 for j in data[i-lookback:i]]
+        pos = np.array(pos)
+        neg = np.array(neg)
+        ave_gain = (1.0-alpha)*ave_gain + alpha*np.average(pos)
+        ave_loss = (1.0-alpha)*ave_loss + alpha*np.average(neg)
+        rsi1 = 100.0 - (100.0 / (1 + ave_gain/ave_loss))
+        rsi_out[i] = rsi1
+    
+    out_df = DataFrame(rsi_out, columns=['RSI'])
+    out_df = out_df.replace([np.nan, np.inf], 0)
+    out_df = out_df.set_index(data1.index)
+    
+    df_out = data1.merge(out_df, right_index=True, left_index=True)
+    return df_out
+
+
+# Bullish/Bearish Signal
+def signal(data, lookback=14):
+    rsi_out = RSI(data, initial_lookback=lookback, lookback=lookback)
+    fractal = fractal_indicator(data, n=20, min_max_lookback=lookback)
+    rsi = rsi_out['RSI']
+    frac = fractal['Fractal_Indicator']
+    data = data.merge(rsi, right_index=True, left_index=True)
+    data = data.merge(frac, right_index=True, left_index=True)
+    data = data[data['Fractal_Indicator'] != 0]
+    data = data[data['RSI'] != 0]
+    rsi_ = [-1.0 if data['RSI'][i] <= 30 else (1.0 if data['RSI'][i] >= 70 else 0.0) for i in range(len(data))]
+    rsi_ = np.array(rsi_)
+    rsi_ = pd.DataFrame(rsi_, columns=['RSI_Signal'])
+    rsi_ = rsi_.set_index(data.index)
+    #data = data.assign(RSI_signal = lambda x: (-1 if x['RSI'].values <= 30 else (1 if x['RSI'].values >= 70 else 0)))
+    trend = [data['Adj Close'][i] - data['Adj Close'][i-lookback] if (i-lookback) > 0 else 0 for i in range(len(data))]
+    fr = [1.0 if data['Fractal_Indicator'][i] >= 1 else 0 for i in range(len(data))]
+    trend1 = [-1.0 if trend[i] < 0 else (1.0 if trend[i] > 0 else 0) for i in range(len(trend))]
+    fr_trend1 = [fr[i]*trend1[i] for i in range(len(fr))]
+    fr_trend1 = np.array(fr_trend1)
+    fr_trend1 = pd.DataFrame(fr_trend1, columns=['Fractal_Signal'])
+    fr_trend1 = fr_trend1.set_index(data.index)
+    sig_out = data.merge(fr_trend1, right_index=True, left_index=True)
+    sig_out = sig_out.merge(rsi_, right_index=True, left_index=True)
+    return sig_out
+    
+    
+# Calculate log returns
+def log_ret(data):
+    high = data['high']
+    low = data['low']
+    adj_close = data['Adj Close']
+    
+    high = log_returns(high)
+    low = log_returns(low)
+    adj_close = log_returns(adj_close)
+    
+    high = high.replace([np.nan, np.inf], 0)
+    low = low.replace([np.nan, np.inf], 0)
+    adj_close = adj_close.replace([np.nan, np.inf], 0)
+    
+    out_df = pd.concat([high, low, adj_close], axis=1)
+    
+    return out_df
+    
+# Stock trade strategy simulation
+
+# Exponential average true range
+def eATR(data, lookback=10):
+    m = data.values
+    z = np.zeros((m.shape[0], 2))
+    m = np.concatenate((m, z), axis=1)
+    columns = ['Open', 'high', 'low', 'Adj Close', 'ATR', 'eATR']
+    # calculate ATR values
+    for i in range(1, len(m)):
+        atr = [m[i,1] - m[i,2], abs(m[i,1] - m[i-1,3]), abs(m[i-1,3] - m[i,2])]
+        m[i,4] = max(atr)
+    # calcualate exponential moving average
+    alpha = 2.0/float(lookback+1.0)
+    sma = sum(m[:lookback,4]) / float(lookback)
+    m[lookback,5] = sma
+    for i in range(1,len(m)-lookback):
+         m[i+lookback,5] = m[i+lookback,4]*alpha + m[i-1+lookback,5]*(1.0-alpha)
+    out = pd.DataFrame(m, columns=columns, index=data.index)
+    return out
+
+
+def strategize(data, strategy={'buy':1.0, 'risk':1.0}, chandelier=False):
+    m = data.values
+    z = np.zeros((m.shape[0], 2))
+    m = np.concatenate((m, z), axis=1)
+    columns = ['Open', 'high', 'low', 'Adj Close', 'ATR', 'eATR', 'buy_point', 'sell_point']
+    for i in range(1, len(m)):
+        if (m[i,3] > (m[i-1,3] + strategy['buy']*m[i-1,5])) and (m[i-1,5]>0):
+            m[i,6] = 1
+        if chandelier:
+            if (m[i,3] < (m[i-1,1] - strategy['risk']*m[i-1,5])) and (m[i-1,5]>0):
+                m[i,7] = 1
+        else:
+            if (m[i,3] < (m[i-1,3] - strategy['risk']*m[i-1,5])) and (m[i-1,5]>0):
+                m[i,7] = 1
+    out = pd.DataFrame(m, columns=columns, index=data.index)
+    return out
+
+
+def evaluate(data, risk_factor=1.0, chandelier=False):
+    m = data.values
+    profits = []
+    risk_rewards = []
+    winning = 0
+    all_trades = 0
+    
+    j = 0
+    j_start = 1
+    
+    for i in range(1,len(m)-1):
+        
+        if m[i,6] == 1:
+            buy = m[i,3]
+            if j_start < i:
+                j_start = i+1
+            else:
+                j_start = j
+            for j in range(j_start,len(m)):
+                if m[j,7] == 1:
+                    sell = m[j,3]
+                    all_trades += 1
+                    profit = sell-buy
+                    profits.append(profit)
+                    if chandelier:
+                        stop = m[i-1,1] - risk_factor*m[i,5] 
+                    else:
+                        stop = m[i-1,3] - risk_factor*m[i,5]
+                    risk_reward = profit / (buy - stop)
+                    risk_rewards.append(risk_reward)
+                    if profit > 0:
+                        winning += 1
+                    break
+    
+    if len(profits) != 0:   
+        expected = np.average(np.array(profits))
+    else:
+        expected = 0.0
+    total_profit = sum(profits)
+    if all_trades != 0:
+        hit_ratio = float(winning)/float(all_trades)
+    else:
+        hit_ratio = 0.0
+    gross_profits = [k for k in profits if k > 0]
+    gross_losses = [abs(k) for k in profits if k < 0]
+    if sum(gross_losses) != 0.0:
+        profit_factor = sum(gross_profits) / sum(gross_losses)
+    else:
+        profit_factor = np.nan
+    if len(risk_rewards) != 0:
+        risk_reward = np.average(np.array(risk_rewards))
+    else:
+        risk_reward = 0.0
+    output = {'hit_ratio':round(hit_ratio,2), 'total_trades':all_trades, 'expected':round(expected,2), 'total_profit':round(total_profit,2), 'profit_factor':round(profit_factor,2), 'risk_ratio':round(risk_reward,2)}
+    return output
+    
+
+# Find optimal strategy
+def simulate_strategies(data, buy_range = (1.0, 4.0, 0.25), risk_range=(1.0, 4.0, 0.25), chandelier=False):
+    buy_i = (buy_range[1] - buy_range[0])/buy_range[2]
+    buy_test = [buy_range[0] + float(i)*buy_range[2] for i in range(int(buy_i)+1)]
+    risk_i = (risk_range[1] - risk_range[0])/risk_range[2]
+    risk_test = [risk_range[0] + float(i)*risk_range[2] for i in range(int(risk_i)+1)]
+    strategies = []
+    for i in buy_test:
+        for j in risk_test:
+            s = {'buy':i, 'risk':j}
+            strategies.append(s)
+    
+    for strategy in strategies:
+        eatr = eATR(data)
+        strat = strategize(eatr, strategy=strategy, chandelier=chandelier)
+        sim = evaluate(strat, risk_factor=strategy['risk'], chandelier=chandelier)
+        strategy.update(sim)
+    return strategies
+
+def find_optimal_strategy(strategies):
+    previous_number_to_beat = 0.0
+    best_strategy = None
+    for strategy in strategies:
+        profit = strategy['total_profit']
+        if profit > previous_number_to_beat:
+            best_strategy = strategy
+            previous_number_to_beat = profit
+    return best_strategy

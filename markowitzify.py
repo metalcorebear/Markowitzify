@@ -357,4 +357,133 @@ class portfolio():
             print('Hurst Exponents.')
             print(self.H.head())
         
+
+"""
+This class will construct and analyze an individual stock or cryptocurrency object.
+
+"""
+
+class stonks():
+    
+    def __init__(self, TKR, **options):
         
+        date_from, _ = mojo.get_date_range(10*360, end_date=None)
+        start = options.pop('start', date_from)
+        
+        self.TKR = TKR
+        self.stonk = mojo.import_high_low(start = start, ticker=TKR)
+        self.verbose = options.pop('verbose', False)
+        self.bands = None
+        self.fract = None
+        self.rsi = None
+        self.sig = None
+        self.strategies = None
+        self.best_strategy = None
+        self.log_stonk = mojo.log_ret(self.stonk)
+        
+        if self.verbose:
+            print('Verbose is turned on... A long, long time ago the World was in an age of Chaos. In the middle of this chaos, in a little kingdom in the land of Hyrule, a legend was being handed down from generation to generation, the legend of the ''Triforce''; golden triangles possessing mystical powers...')
+            print('Stonk is {}'.format(self.TKR))
+            print(self.stonk.head())
+    
+    def help_(self):
+        
+        mojo.help_()
+        
+    def about(self):
+        
+        mojo.about()
+    
+    def set_verbose(self, verbose):
+    
+        if isinstance(verbose, bool):
+            self.verbose = verbose
+            
+            if self.verbose:
+                print('Verbose is turned on... A long, long time ago the World was in an age of Chaos. In the middle of this chaos, in a little kingdom in the land of Hyrule, a legend was being handed down from generation to generation, the legend of the ''Triforce''; golden triangles possessing mystical powers...')
+            
+            if not self.verbose:
+                print('Well excuuuse me, princess!')
+                print("Verbose is turned off.  I guess you don't like funny Zelda quotes...")
+        
+        else:
+            print('Grumble, Grumble')
+            print('Input Error: Entry must be a bool (True or False).')
+    
+    def fractal(self, **options):
+        
+        n = options.pop('n', 20)
+        lookback = options.pop('lookback', 14)
+        
+        if self.verbose:
+            print('Calculating Fractal Indicator...')
+            print('Retiulating Splines...')
+            
+        self.fract = mojo.fractal_indicator(self.stonk, n=n, min_max_lookback=lookback)
+        
+        if self.verbose:
+            print(self.fract.head())
+        
+    def bollinger(self, **options):
+        
+        n = options.pop('n', 20)
+        m = options.pop('m', 2)
+        log_ = options.pop('log_returns', True)
+        tp, upper, lower = mojo.bollinger(self.stonk, m=m, n=n, log_=log_)
+        
+        concatenated = mojo.np.concatenate((tp, upper, lower), axis=1)
+        
+        if self.verbose:
+            print('Calculating Bollinger Bands...')
+        
+        self.bands = mojo.pd.DataFrame(concatenated, columns = ['Trending_Price', 'Upper', 'Lower'])
+        
+        if self.verbose:
+            print(self.bands.head())
+    
+    def RSI(self, **options):
+        
+        initial_lookback = options.pop('initial_lookback', 14)
+        lookback = options.pop('lookback', 14)
+        
+        if self.verbose:
+            print('Calculating RSI...')        
+        
+        self.rsi = mojo.RSI(self.stonk, initial_lookback=initial_lookback, lookback=lookback)
+        
+        if self.verbose:
+            print(self.rsi.head())
+            
+    def signal(self, **options):
+        
+        lookback = options.pop('lookback', 14)
+        
+        if self.verbose:
+            print('Calculating Bullish/Bearish signal...')        
+        
+        self.sig = mojo.signal(self.stonk, lookback=lookback)
+
+        if self.verbose:
+            print(self.sig.head())        
+        
+    def strategize(self, **options):
+        
+        eATR_lookback = options.pop('eATR_lookback', 10)
+        buy_range = options.pop('buy_range', (1.0, 4.0, 0.25))
+        risk_range = options.pop('risk_range',(1.0, 4.0, 0.25))
+        chandelier = options.pop('chandelier', False)
+        
+        self.eatr = mojo.eATR(self.stonk, lookback=eATR_lookback)
+        
+        if self.verbose:
+            print('Backtesting strategies....')
+        
+        strategies = mojo.simulate_strategies(self.stonk, buy_range = buy_range, risk_range=risk_range, chandelier=chandelier)
+        self.strategies = mojo.pd.DataFrame(strategies)
+        
+        self.best_strategy = mojo.find_optimal_strategy(strategies)
+        
+        if self.verbose:
+            s = mojo.pd.DataFrame(self.best_strategy, index=[self.TKR])
+            print('Optimal Strategy:')
+            print(s)

@@ -10,10 +10,10 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="markowitzify",
-    version="0.0.4",
+    version="0.0.5",
     author="metalcorebear",
     author_email="mark.mbailey@gmail.com",
-    description="Markowitzify will implement portfolio optimization based on the theory described by Harry Markowitz (University of California, San Diego), and elaborated by Marcos M. Lopez de Prado (Cornell University).  Additionally, this repository simulates individual stock performance over time using Monte Carlo methods.",
+    description="Markowitzify will implement a variety of portfolio and stock/cryptocurrency analysis methods to optimize portfolios or trading strategies.  The two primary classes are portfolio and stonks.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/metalcorebear/Markowitzify",
